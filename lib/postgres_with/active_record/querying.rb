@@ -1,5 +1,5 @@
 module ActiveRecord::Querying
-  delegate :with, :ranked, to: :all
+  delegate :with, to: :all
 
   def from_cte(name, expression)
     table = Arel::Table.new(name)
