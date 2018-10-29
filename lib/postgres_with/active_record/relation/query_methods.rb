@@ -60,22 +60,22 @@ module ActiveRecord
       end
     end
 
-    def build_arel_with_extensions
-      arel = build_arel_without_extensions
+    def build_arel_with_extensions(aliases = nil)
+      arel = build_arel_without_extensions(aliases)
 
       with_statements = with_values.flat_map do |with_value|
         case with_value
         when String
           with_value
         when Hash
-          with_value.map  do |name, expression|
+          with_value.map do |name, expression|
             case expression
             when String
               select = Arel::Nodes::SqlLiteral.new "(#{expression})"
             when ActiveRecord::Relation, Arel::SelectManager
               select = Arel::Nodes::SqlLiteral.new "(#{expression.to_sql})"
             end
-            Arel::Nodes::As.new Arel::Nodes::SqlLiteral.new("\"#{name.to_s}\""), select
+            Arel::Nodes::As.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
           end
         when Arel::Nodes::As
           with_value
