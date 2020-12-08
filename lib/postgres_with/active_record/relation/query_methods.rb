@@ -7,6 +7,21 @@ module ActiveRecord
         @scope = scope
       end
 
+      def materialized(*args)
+        materialized_args = args.flat_map do |arg|
+          case arg
+          when Hash
+            name = arg.keys.first
+            new_name = "_materialized_#{name}"
+            { new_name => arg[name] }
+          else
+            arg
+          end
+        end
+        @scope.with_values += materialized_args
+        @scope
+      end
+
       # Returns a new relation expressing WITH RECURSIVE
       def recursive(*args)
         @scope.with_values += args
@@ -75,7 +90,12 @@ module ActiveRecord
             when ActiveRecord::Relation, Arel::SelectManager
               select = Arel::Nodes::SqlLiteral.new "(#{expression.to_sql})"
             end
-            Arel::Nodes::As.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
+            if name.to_s.start_with?('_materialized_')
+              name = name.gsub('_materialized_', '')
+              Arel::Nodes::AsMaterialized.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
+            else
+              Arel::Nodes::As.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
+            end
           end
         when Arel::Nodes::As
           with_value
