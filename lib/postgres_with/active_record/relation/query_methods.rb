@@ -81,24 +81,15 @@ module ActiveRecord
       with_statements = with_values.flat_map do |with_value|
         case with_value
         when String
-          with_value
+          Arel::Nodes::SqlLiteral.new(with_value)
         when Hash
-          with_value.map do |name, expression|
-            case expression
-            when String
-              select = Arel::Nodes::SqlLiteral.new "(#{expression})"
-            when ActiveRecord::Relation, Arel::SelectManager
-              select = Arel::Nodes::SqlLiteral.new "(#{expression.to_sql})"
-            end
-            if name.to_s.start_with?('_materialized_')
-              name = name.gsub('_materialized_', '')
-              Arel::Nodes::AsMaterialized.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
-            else
-              Arel::Nodes::As.new Arel::Nodes::SqlLiteral.new("\"#{name}\""), select
-            end
-          end
+          build_arel_from_hash(with_value)
         when Arel::Nodes::As
           with_value
+        when Array
+          build_arel_from_array(with_value)
+        else
+          raise ArgumentError, "Unsupported argument type: #{with_value} #{with_value.class}"
         end
       end
       unless with_statements.empty?
@@ -110,6 +101,35 @@ module ActiveRecord
       end
 
       arel
+    end
+
+    def build_arel_from_hash(with_value)
+      with_value.map do |name, expression|
+        select = case expression
+                 when String
+                   Arel::Nodes::SqlLiteral.new("(#{expression})")
+                 when ActiveRecord::Relation
+                   expression.arel
+                 when Arel::SelectManager
+                   expression
+                 end
+        if name.to_s.start_with?('_materialized_')
+          name = name.gsub('_materialized_', '')
+          table = Arel::Table.new(name)
+          Arel::Nodes::AsMaterialized.new(table, select)
+        else
+          table = Arel::Table.new(name)
+          Arel::Nodes::As.new(table, select)
+        end
+      end
+    end
+
+    def build_arel_from_array(array)
+      unless array.map(&:class).uniq == [Arel::Nodes::As]
+        raise ArgumentError, "Unsupported argument type: #{array} #{array.class}"
+      end
+
+      array
     end
 
     alias_method :build_arel_without_extensions, :build_arel
